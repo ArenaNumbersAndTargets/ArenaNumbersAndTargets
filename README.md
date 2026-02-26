@@ -23,7 +23,7 @@ Click any button to instantly send a callout to your group chat — works in 2v2
 
 Copy the `ArenaNumbersAndTargets` folder into:
 ```
-World of Warcraft/_classic_tbc_/Interface/AddOns/
+World of Warcraft/_anniversary_/Interface/AddOns/
 ```
 Then reload or restart the game client.
 
@@ -42,3 +42,11 @@ Then reload or restart the game client.
 - **CC message template** — default: `CC target %d`
 
 `%d` is replaced by the arena target number (1, 2 or 3) when you click a button.
+
+## License
+
+MIT — see [LICENSE](LICENSE).
+
+## Author
+
+Coltsroot &lt;DS&gt;
