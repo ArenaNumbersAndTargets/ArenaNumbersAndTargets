@@ -114,6 +114,14 @@ local function OnNamePlateAdded(nameplateUnit)
     local arenaIndex = GetArenaIndexForUnit(nameplateUnit)
     if arenaIndex then
         AttachLabel(arenaIndex, nameplateUnit)
+    elseif C_Timer and C_Timer.After then
+        -- Arena unit IDs may not be ready yet; retry after a short delay.
+        C_Timer.After(0.5, function()
+            if not isInArena then return end
+            if GetLabelIndexByTrackedUnit(nameplateUnit) then return end
+            local idx = GetArenaIndexForUnit(nameplateUnit)
+            if idx then AttachLabel(idx, nameplateUnit) end
+        end)
     end
 end
 
@@ -147,7 +155,18 @@ local function EnterArena()
     SetCVar("nameplateShowEnemies", 1)
     eventFrame:RegisterEvent("NAME_PLATE_UNIT_ADDED")
     eventFrame:RegisterEvent("NAME_PLATE_UNIT_REMOVED")
+    -- ARENA_OPPONENT_UPDATE fires when enemy info becomes available; pcall in
+    -- case the event name doesn't exist on this client build.
+    pcall(function() eventFrame:RegisterEvent("ARENA_OPPONENT_UPDATE") end)
     ScanExistingNameplates()
+    -- Schedule repeated scans during the first seconds to catch late arena unit info.
+    if C_Timer and C_Timer.After then
+        for _, delay in ipairs({0.5, 1, 2, 3, 5}) do
+            C_Timer.After(delay, function()
+                if isInArena then ScanExistingNameplates() end
+            end)
+        end
+    end
     if ArenaNumbersAndTargets.OnEnterArena then ArenaNumbersAndTargets.OnEnterArena() end
 end
 
@@ -155,6 +174,7 @@ local function LeaveArena()
     isInArena = false
     eventFrame:UnregisterEvent("NAME_PLATE_UNIT_ADDED")
     eventFrame:UnregisterEvent("NAME_PLATE_UNIT_REMOVED")
+    pcall(function() eventFrame:UnregisterEvent("ARENA_OPPONENT_UPDATE") end)
     DetachAllLabels()
     if ArenaNumbersAndTargets.OnLeaveArena then ArenaNumbersAndTargets.OnLeaveArena() end
 end
@@ -190,6 +210,9 @@ eventFrame:SetScript("OnEvent", function(self, event, ...)
 
     elseif event == "NAME_PLATE_UNIT_REMOVED" then
         OnNamePlateRemoved(...)
+
+    elseif event == "ARENA_OPPONENT_UPDATE" then
+        ScanExistingNameplates()
     end
 end)
 

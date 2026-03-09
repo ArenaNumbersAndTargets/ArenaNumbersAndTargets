@@ -11,6 +11,7 @@ local DEFAULTS = {
     ccTemplate   = "CC target %d",
     panelX       = nil,
     panelY       = nil,
+    buttonCount  = 3,
 }
 
 local db   -- shortcut to ArenaNumbersAndTargetsDB after merge
@@ -93,9 +94,47 @@ end
 
 commsPanel = nil
 
+-- Button references: commsPanelButtons[rowIdx][colIdx] = Button
+local commsPanelButtons = {}
+local commsModeLabel    = nil   -- FontString showing "3v3" etc.
+
+local PANEL_WIDTHS = { [2] = 120, [3] = 156, [5] = 228 }
+local MODE_ORDER   = { 2, 3, 5 }
+
+local function UpdateCommsButtonCount(count)
+    db.buttonCount = count
+    commsPanel:SetWidth(PANEL_WIDTHS[count] or 156)
+    for rowIdx = 1, 2 do
+        for colIdx = 1, 5 do
+            if commsPanelButtons[rowIdx] and commsPanelButtons[rowIdx][colIdx] then
+                if colIdx <= count then
+                    commsPanelButtons[rowIdx][colIdx]:Show()
+                else
+                    commsPanelButtons[rowIdx][colIdx]:Hide()
+                end
+            end
+        end
+    end
+    if commsModeLabel then
+        commsModeLabel:SetText(count .. "v" .. count)
+    end
+end
+
+local function CycleCommsMode()
+    local current = db.buttonCount or 3
+    local nextIdx = 1
+    for i, v in ipairs(MODE_ORDER) do
+        if v == current then
+            nextIdx = (i % #MODE_ORDER) + 1
+            break
+        end
+    end
+    UpdateCommsButtonCount(MODE_ORDER[nextIdx])
+end
+
 function BuildCommsPanel()
     local panel = CreateFrame("Frame", "ANT_CommsPanel", UIParent, "BackdropTemplate")
-    panel:SetSize(156, 54)
+    panel:SetSize(156, 70)
     panel:SetPoint("CENTER", UIParent, "CENTER", 0, -200)
     panel:SetFrameStrata("MEDIUM")
     panel:SetMovable(true)
@@ -124,24 +163,41 @@ function BuildCommsPanel()
         db.panelY = y - uy
     end)
 
+    -- Mode toggle (clickable label at the top, cycles 2v2 → 3v3 → 5v5)
+    local modeBtn = CreateFrame("Button", nil, panel)
+    modeBtn:SetSize(44, 14)
+    modeBtn:SetPoint("TOP", panel, "TOP", 0, -4)
+    local modeLbl = modeBtn:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    modeLbl:SetPoint("CENTER")
+    modeLbl:SetTextColor(0.8, 0.8, 0.2, 1)
+    commsModeLabel = modeLbl
+    modeBtn:SetScript("OnClick", function() CycleCommsMode() end)
+    modeBtn:SetScript("OnEnter", function(self)
+        GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+        GameTooltip:SetText("Click to switch arena size", 1, 1, 1)
+        GameTooltip:Show()
+    end)
+    modeBtn:SetScript("OnLeave", function() GameTooltip:Hide() end)
+
+    -- Button grid
     local rows = {
         { label = "Kill", r = 1.0, g = 0.2, b = 0.2, msgType = "kill" },  -- red
         { label = "CC",   r = 0.3, g = 1.0, b = 0.0, msgType = "cc"   },  -- fel green
     }
 
     local BTN_W, BTN_H = 30, 18
-    local COL_X = { 32, 68, 104 }  -- x of each column from TOPLEFT
-    local ROW_Y = { -6, -30 }      -- y of each row top from TOPLEFT
+    local COL_X = { 32, 68, 104, 140, 176 }
+    local ROW_Y = { -20, -44 }
 
     for rowIdx, rowDef in ipairs(rows) do
-        -- Label anchored from TOPLEFT, vertically centred with the button row.
-        -- ROW_Y[rowIdx] = button top; subtracting BTN_H/2 gives button centre.
+        commsPanelButtons[rowIdx] = {}
+
         local lbl = panel:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
         lbl:SetPoint("LEFT", panel, "TOPLEFT", 4, ROW_Y[rowIdx] - BTN_H / 2)
         lbl:SetTextColor(rowDef.r, rowDef.g, rowDef.b, 1)
         lbl:SetText(rowDef.label)
 
-        for colIdx = 1, 3 do
+        for colIdx = 1, 5 do
             local arenaNum = colIdx
             local btn = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
             btn:SetSize(BTN_W, BTN_H)
@@ -153,11 +209,16 @@ function BuildCommsPanel()
             btn:SetScript("OnClick", function()
                 SendCallout(capturedType, arenaNum)
             end)
+
+            commsPanelButtons[rowIdx][colIdx] = btn
         end
     end
 
     panel:Hide()
     commsPanel = panel
+
+    -- Apply saved button count (shows/hides buttons and sets panel width)
+    UpdateCommsButtonCount(db.buttonCount)
 end
 
 -- ── Config panel (lazy, built on first /abn config) ───────────────────────
